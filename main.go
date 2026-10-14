@@ -33,6 +33,11 @@ func main() {
 			return
 		}
 	}
+
+	data.writeUtility("init.sh", "init", false)
+	data.writeUtility("apply.sh", "apply -auto-approve", false)
+	data.writeUtility("destroy.sh", "destroy -auto-approve", true)
+	data.writeWorkspaceDestroy()
 }
 
 func parseArgs(cmdline []string) *args {
@@ -115,6 +120,40 @@ func (a *args) generate(index int) error {
 
 	fmt.Printf("Created %s: %v\n", fileName, dependencies)
 	return nil
+}
+
+func (a *args) writeUtility(name string, cmd string, reverse bool) {
+	fileName := path.Join(a.outdir, name)
+	file, err := os.Create(fileName)
+	if err != nil {
+		fmt.Printf("Error creating utility file %s: %v\n", fileName, err)
+		return
+	}
+	defer file.Close()
+
+	start, end, delta := 1, a.count+1, 1
+	if reverse {
+		start, end, delta = a.count, 0, -1
+	}
+	for i := start; i != end; i += delta {
+		graphName := a.graphname(i)
+		_, err = fmt.Fprintf(file, "terraform -chdir=%s %s\n", graphName, cmd)
+	}
+}
+
+func (a *args) writeWorkspaceDestroy() {
+	fileName := path.Join(a.outdir, "workspace-destroy.sh")
+	file, err := os.Create(fileName)
+	if err != nil {
+		fmt.Printf("Error creating utility file %s: %v\n", fileName, err)
+		return
+	}
+	defer file.Close()
+
+	for i := 1; i <= a.count; i++ {
+		graphName := a.graphname(i)
+		_, err = fmt.Fprintf(file, "curl -X DELETE -H \"Authorization: Bearer $TOKEN\" https://%s/api/v2/organizations/%s/workspaces/%s\n", a.hostname, a.organization, graphName)
+	}
 }
 
 func (a *args) graphname(index int) string {

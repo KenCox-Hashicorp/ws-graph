@@ -33,13 +33,10 @@ The connectivity is not the probability itself, but is scaled in such a way that
 generally have between 0 and 5 dependencies (though some might have more).
 
 Since the workspaces only depend on lower-numbered workspaces,
-they should be created or updated in numerical order, for example by a bash script:
-```
-for T in gws* ;do
- cd $T
- terraform init
- terraform apply -auto-approve
- cd -
-done
-```
+they should be created or updated in numerical order and destroyed in reverse order.
+The program writes three utility files, `init.sh`, `apply.sh`, and `destroy.sh`,
+to perform the terraform init, apply, and destroy commands in the correct order.
 
+The `workspace-destroy.sh` script force-deletes all the workspaces.
+It should be used only after destroying all resources.
+The script requires environment variable `TOKEN` is set to a TF API token for the host.

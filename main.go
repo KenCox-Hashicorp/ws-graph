@@ -20,6 +20,18 @@ type (
 	}
 )
 
+const (
+	patchGlobalRemoteStateScriptFmt = `
+patchGlobalRemoteState() {
+  if [[ -n "$TOKEN" ]] ;then
+    curl -X PATCH -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/vnd.api+json" \
+	-d '{ "data": { "type": "workspaces", "attributes": { "global-remote-state": true } } }' \
+	"https://%s/api/v2/organizations/%s/workspaces/$1" 2>1 > /dev/null
+  fi
+}
+`
+)
+
 func main() {
 	data := parseArgs(os.Args)
 
@@ -34,9 +46,9 @@ func main() {
 		}
 	}
 
-	data.writeUtility("init.sh", "init", false)
-	data.writeUtility("apply.sh", "apply -auto-approve", false)
-	data.writeUtility("destroy.sh", "destroy -auto-approve", true)
+	data.writeUtility("init.sh", "init", false, true)
+	data.writeUtility("apply.sh", "apply -auto-approve", false, false)
+	data.writeUtility("destroy.sh", "destroy -auto-approve", true, false)
 	data.writeWorkspaceDestroy()
 }
 
@@ -122,7 +134,7 @@ func (a *args) generate(index int) error {
 	return nil
 }
 
-func (a *args) writeUtility(name string, cmd string, reverse bool) {
+func (a *args) writeUtility(name string, cmd string, reverse bool, isInit bool) {
 	fileName := path.Join(a.outdir, name)
 	file, err := os.Create(fileName)
 	if err != nil {
@@ -131,13 +143,29 @@ func (a *args) writeUtility(name string, cmd string, reverse bool) {
 	}
 	defer file.Close()
 
+	if isInit {
+		if _, err = fmt.Fprintf(file, patchGlobalRemoteStateScriptFmt, a.hostname, a.organization); err != nil {
+			fmt.Printf("Error writing global-remote-state patch in file %s: %v\n", fileName, err)
+			return
+		}
+	}
+
 	start, end, delta := 1, a.count+1, 1
 	if reverse {
 		start, end, delta = a.count, 0, -1
 	}
 	for i := start; i != end; i += delta {
 		graphName := a.graphname(i)
-		_, err = fmt.Fprintf(file, "terraform -chdir=%s %s\n", graphName, cmd)
+		if _, err = fmt.Fprintf(file, "terraform -chdir=%s %s\n", graphName, cmd); err != nil {
+			fmt.Printf("Error writing command in file %s: %v\n", fileName, err)
+			return
+		}
+		if isInit {
+			if _, err = fmt.Fprintf(file, "patchGlobalRemoteState %s\n", graphName); err != nil {
+				fmt.Printf("Error writing command in file %s: %v\n", fileName, err)
+				return
+			}
+		}
 	}
 }
 

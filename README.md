@@ -37,6 +37,10 @@ they should be created or updated in numerical order and destroyed in reverse or
 The program writes three utility files, `init.sh`, `apply.sh`, and `destroy.sh`,
 to perform the terraform init, apply, and destroy commands in the correct order.
 
+In production (`app.terraform.io`) workspaces do not share remote-state by default.
+The `init.sh` script will enable remote-state sharing on the workspaces,
+if the environment variable `TOKEN` is set to a TF API token for the host.
+
 The `workspace-destroy.sh` script force-deletes all the workspaces.
 It should be used only after destroying all resources.
-The script requires environment variable `TOKEN` is set to a TF API token for the host.
+The script requires environment variable `TOKEN` is set.
